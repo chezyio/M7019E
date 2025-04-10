@@ -49,7 +49,6 @@ fun MainScreen() {
             )
         }
     ) { innerPadding ->
-        // Display the selected tab content
         Surface(
             modifier = Modifier.padding(innerPadding),
             color = MaterialTheme.colorScheme.background
@@ -80,7 +79,7 @@ fun BottomTabBar(
 sealed class TabItem(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val screen: @Composable () -> Unit) {
     object Home : TabItem("Home", Icons.Default.Home, { HomeScreen() })
     object Search : TabItem("Search", Icons.Default.Search, { SearchScreen() })
-    object Favorites : TabItem("Favorites", Icons.Default.Favorite, { FavoritesScreen() })
+    object Favorites : TabItem("Favorites", Icons.Default.Favorite, { SecondActivity() })
 }
 
 @Composable
@@ -96,15 +95,6 @@ fun HomeScreen() {
 fun SearchScreen() {
     Text(
         text = "Search Screen",
-        style = MaterialTheme.typography.headlineMedium,
-        modifier = Modifier.fillMaxSize()
-    )
-}
-
-@Composable
-fun FavoritesScreen() {
-    Text(
-        text = "Favorites Screen",
         style = MaterialTheme.typography.headlineMedium,
         modifier = Modifier.fillMaxSize()
     )
