@@ -10,7 +10,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
@@ -20,7 +19,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
 @Composable
-fun SecondActivity() {
+fun HomeActivity() {
     val navController = rememberNavController()
 
     NavHost(
@@ -45,7 +44,12 @@ fun SecondActivity() {
                     onBackClick = { navController.popBackStack() }
                 )
             } else {
-                Text("Movie not found", modifier = Modifier.padding(16.dp))
+                Text(
+                    text = "Movie not found",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(16.dp)
+                )
             }
         }
     }
@@ -58,11 +62,6 @@ fun MovieListScreen(movies: List<Movie>, onMovieClick: (Movie) -> Unit) {
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Text(
-            text = "Second Screen",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Spacer(modifier = Modifier.height(16.dp))
         MovieList(movies = movies, onMovieClick = onMovieClick)
     }
 }
@@ -84,14 +83,19 @@ fun MovieCard(movie: Movie, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
             Text(
                 text = movie.title,
-                style = MaterialTheme.typography.titleLarge
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(
@@ -100,12 +104,13 @@ fun MovieCard(movie: Movie, onClick: () -> Unit) {
                 movie.genres.forEach { genre ->
                     Surface(
                         shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.primaryContainer
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     ) {
                         Text(
                             text = genre.name,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.bodyMedium
+                            style = MaterialTheme.typography.labelLarge
                         )
                     }
                 }
@@ -122,17 +127,30 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(movie.title) },
+                title = {
+                    Text(
+                        text = movie.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+                )
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -142,22 +160,26 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
         ) {
             Text(
                 text = "Genres: ${movie.genres.joinToString { it.name }}",
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Overview: ${movie.overview ?: "N/A"}",
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Release Date: ${movie.release_date}",
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Rating: ${movie.vote_average}/10",
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -179,10 +201,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                     textDecoration = TextDecoration.Underline
                 ),
                 modifier = Modifier.clickable {
-                    // imdb url format
                     val imdbUrl = "https://www.imdb.com/title/${movie.imdb_id}/"
-
-                    // use ACTION_VIEW to open in app
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(imdbUrl))
                     context.startActivity(intent)
                 }

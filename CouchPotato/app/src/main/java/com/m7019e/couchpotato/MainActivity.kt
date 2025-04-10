@@ -35,8 +35,7 @@ class MainActivity : ComponentActivity() {
 fun MainScreen() {
     val tabs = listOf(
         TabItem.Home,
-        TabItem.Second,
-        TabItem.Search
+        TabItem.Profile
 
     )
     val selectedTab = remember { mutableStateOf(tabs[0]) }
@@ -78,28 +77,10 @@ fun BottomTabBar(
 }
 
 sealed class TabItem(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val screen: @Composable () -> Unit) {
-    object Home : TabItem("Home", Icons.Default.Home, { HomeScreen() })
-    object Search : TabItem("Search", Icons.Default.Search, { SearchScreen() })
-    object Second : TabItem("Second", Icons.Default.Favorite, { SecondActivity() })
+    object Home : TabItem("Home", Icons.Default.Home, { HomeActivity() })
+    object Profile : TabItem("Profile", Icons.Default.Person, { ProfileActivity() })
 }
 
-@Composable
-fun HomeScreen() {
-    Text(
-        text = "Home Screen",
-        style = MaterialTheme.typography.headlineMedium,
-        modifier = Modifier.fillMaxSize()
-    )
-}
-
-@Composable
-fun SearchScreen() {
-    Text(
-        text = "Search Screen",
-        style = MaterialTheme.typography.headlineMedium,
-        modifier = Modifier.fillMaxSize()
-    )
-}
 
 @Preview(showBackground = true)
 @Composable
