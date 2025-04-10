@@ -5,6 +5,9 @@ import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -68,8 +71,10 @@ fun MovieListScreen(movies: List<Movie>, onMovieClick: (Movie) -> Unit) {
 
 @Composable
 fun MovieList(movies: List<Movie>, onMovieClick: (Movie) -> Unit) {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         items(movies) { movie ->
             MovieCard(movie = movie, onClick = { onMovieClick(movie) })
@@ -94,7 +99,7 @@ fun MovieCard(movie: Movie, onClick: () -> Unit) {
         ) {
             Text(
                 text = movie.title,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
