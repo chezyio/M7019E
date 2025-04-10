@@ -59,7 +59,7 @@ fun MovieListScreen(movies: List<Movie>, onMovieClick: (Movie) -> Unit) {
             .padding(16.dp)
     ) {
         Text(
-            text = "Favorites Screen",
+            text = "Second Screen",
             style = MaterialTheme.typography.headlineMedium
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -146,7 +146,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Overview: ${movie.overview}",
+                text = "Overview: ${movie.overview ?: "N/A"}",
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -168,6 +168,22 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                 ),
                 modifier = Modifier.clickable {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(movie.homepage))
+                    context.startActivity(intent)
+                }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Open in IMDb",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.primary,
+                    textDecoration = TextDecoration.Underline
+                ),
+                modifier = Modifier.clickable {
+                    // imdb url format
+                    val imdbUrl = "https://www.imdb.com/title/${movie.imdb_id}/"
+
+                    // use ACTION_VIEW to open in app
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(imdbUrl))
                     context.startActivity(intent)
                 }
             )
