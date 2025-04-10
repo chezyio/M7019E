@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -18,6 +20,20 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // load the values from .properties file
+        val keystoreFile = project.rootProject.file("local.properties")
+        val properties = Properties()
+        properties.load(keystoreFile.inputStream())
+
+        // return empty key in case something goes wrong
+        val apiKey = properties.getProperty("TMDB_KEY") ?: ""
+
+        buildConfigField(
+            type = "String",
+            name = "TMDB_KEY",
+            value = apiKey
+        )
     }
 
     buildTypes {
