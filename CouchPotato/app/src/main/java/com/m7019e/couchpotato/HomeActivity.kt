@@ -1,5 +1,6 @@
 package com.m7019e.couchpotato
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
@@ -26,12 +27,23 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.room.Room
 import coil.compose.AsyncImage
+import com.m7019e.couchpotato.database.AppDatabase
+import com.m7019e.couchpotato.database.MovieEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+
+fun getDatabase(context: Context): AppDatabase {
+    return Room.databaseBuilder(
+        context.applicationContext,
+        AppDatabase::class.java,
+        "CouchPotatoDB"
+    ).build()
+}
 
 // GET 20 popular movies from tmdb
 suspend fun fetchPopularMovies(): List<Movie> {
@@ -137,7 +149,6 @@ fun HomeActivity() {
     val scope = rememberCoroutineScope()
     var popularMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var topRatedMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
-
     LaunchedEffect(Unit) {
         scope.launch(Dispatchers.IO) {
             popularMovies = fetchPopularMovies()
@@ -167,6 +178,7 @@ fun HomeActivity() {
                 MovieDetailScreen(
                     movie = movie,
                     onBackClick = { navController.popBackStack() }
+                    // inssert db here
                 )
             } else {
                 Text(
@@ -313,6 +325,7 @@ fun MovieCard(movie: Movie, onClick: () -> Unit) {
 fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     val context = LocalContext.current
     var isFavorite by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -335,7 +348,6 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                 actions = {
                     IconButton(onClick = {
                         Log.d("FAVOURITES", "clicked")
-                        isFavorite = !isFavorite
                     }) {
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
