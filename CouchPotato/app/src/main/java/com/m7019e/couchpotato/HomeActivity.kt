@@ -461,6 +461,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Reviews",
+                text = "Trailers",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -468,6 +469,9 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
             if (reviews.isEmpty()) {
                 Text(
                     text = "No reviews available",
+            if (videos.isEmpty()) {
+                Text(
+                    text = "No videos available",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -478,6 +482,8 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                 ) {
                     items(reviews) { review ->
                         ReviewCard(review = review)
+                    items(videos) { video ->
+                        VideoCard(video = video)
                     }
                 }
             }
