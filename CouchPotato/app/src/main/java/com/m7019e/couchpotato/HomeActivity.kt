@@ -335,6 +335,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                 actions = {
                     IconButton(onClick = {
                         Log.d("FAVOURITES", "clicked")
+                        isFavorite = !isFavorite
                     }) {
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
