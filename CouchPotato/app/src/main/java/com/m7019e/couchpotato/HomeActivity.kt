@@ -12,6 +12,8 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -389,14 +391,11 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var reviews by remember { mutableStateOf<List<Review>>(emptyList()) }
-
-    LaunchedEffect(movie.id) {
-        scope.launch(Dispatchers.IO) {
-            reviews = fetchReviews(movie.id)
     var videos by remember { mutableStateOf<List<Video>>(emptyList()) }
 
     LaunchedEffect(movie.id) {
         scope.launch(Dispatchers.IO) {
+            reviews = fetchReviews(movie.id)
             videos = fetchMovieVideos(movie.id)
         }
     }
@@ -434,6 +433,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             Text(
                 text = "Genres: ${movie.genres.joinToString { it.name }}",
@@ -461,17 +461,12 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Reviews",
-                text = "Trailers",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(modifier = Modifier.height(8.dp))
             if (reviews.isEmpty()) {
                 Text(
                     text = "No reviews available",
-            if (videos.isEmpty()) {
-                Text(
-                    text = "No videos available",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -482,6 +477,26 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                 ) {
                     items(reviews) { review ->
                         ReviewCard(review = review)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Trailers",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (videos.isEmpty()) {
+                Text(
+                    text = "No trailers available",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            } else {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     items(videos) { video ->
                         VideoCard(video = video)
                     }
@@ -491,11 +506,41 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     }
 }
 
+
 @Composable
 fun ReviewCard(review: Review) {
     Card(
         modifier = Modifier
             .width(250.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxSize()
+        ) {
+            Text(
+                text = review.author,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = review.content,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 5,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
 
 @Composable
 fun VideoCard(video: Video) {
@@ -529,7 +574,6 @@ fun VideoCard(video: Video) {
                 .fillMaxSize()
         ) {
             Text(
-                text = review.author,
                 text = video.name,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -537,13 +581,6 @@ fun VideoCard(video: Video) {
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = review.content,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 5,
-                overflow = TextOverflow.Ellipsis
-            )
             AndroidView(
                 factory = {
                     PlayerView(context).apply {
