@@ -2,6 +2,7 @@ package com.m7019e.couchpotato
 
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -127,6 +128,36 @@ suspend fun fetchTopRatedMovies(): List<Movie> {
         emptyList()
     }
 }
+// GET reviews for movie from tmdb
+suspend fun fetchReviews(movieId: Int): List<Review> {
+    val apiKey = BuildConfig.TMDB_KEY
+    val url = "https://api.themoviedb.org/3/movie/$movieId/reviews?api_key=$apiKey&language=en-US&page=1"
+    val client = OkHttpClient()
+    val request = Request.Builder().url(url).build()
+
+    return try {
+        val response = client.newCall(request).execute()
+        val json = response.body?.string() ?: return emptyList()
+        val jsonObject = JSONObject(json)
+        val results = jsonObject.getJSONArray("results")
+        val reviews = mutableListOf<Review>()
+
+        for (i in 0 until results.length()) {
+            val reviewJson = results.getJSONObject(i)
+            reviews.add(
+                Review(
+                    author = reviewJson.getString("author"),
+                    content = reviewJson.getString("content")
+                )
+            )
+        }
+        Log.d("TMDB — GET REVIEWS", reviews.toString())
+        reviews
+    } catch (e: Exception) {
+        emptyList()
+    }
+}
+
 
 @Composable
 fun HomeActivity() {
@@ -309,6 +340,14 @@ fun MovieCard(movie: Movie, onClick: () -> Unit) {
 @Composable
 fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var reviews by remember { mutableStateOf<List<Review>>(emptyList()) }
+
+    LaunchedEffect(movie.id) {
+        scope.launch(Dispatchers.IO) {
+            reviews = fetchReviews(movie.id)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -371,6 +410,12 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
         }
     }
 }
+
+data class Review(
+    val author: String,
+    val content: String
+)
+
 
 val genreMap = mapOf(
     28 to "Action",
