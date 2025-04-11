@@ -2,6 +2,7 @@ package com.m7019e.couchpotato
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.MediaStore
 import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -158,6 +159,48 @@ suspend fun fetchReviews(movieId: Int): List<Review> {
     }
 }
 
+
+suspend fun fetchMovieVideos(movieId: Int): List<Video> {
+    val apiKey = BuildConfig.TMDB_KEY
+    val url = "https://api.themoviedb.org/3/movie/$movieId/videos?api_key=$apiKey&language=en-US"
+    val client = OkHttpClient()
+    val request = Request.Builder().url(url).build()
+
+    return try {
+        val response = client.newCall(request).execute()
+        val json = response.body?.string() ?: return emptyList()
+        val jsonObject = JSONObject(json)
+        val results = jsonObject.getJSONArray("results")
+        val videos = mutableListOf<Video>()
+
+        for (i in 0 until results.length()) {
+            val videoJson = results.getJSONObject(i)
+            val site = videoJson.getString("site")
+            val key = videoJson.getString("key")
+            val videoUrl = when (site) {
+                "YouTube" -> "https://www.youtube.com/watch?v=$key"
+                "Vimeo" -> "https://vimeo.com/$key"
+                else -> null
+            }
+            videoUrl?.let {
+                videos.add(
+                    Video(
+                        id = videoJson.getString("id"),
+                        name = videoJson.getString("name"),
+                        site = site,
+                        key = key,
+                        url = it
+                    )
+                )
+            }
+        }
+        Log.d("TMDB — GET TRAILERS", videos.toString())
+        videos
+    } catch (e: Exception) {
+        e.printStackTrace()
+        emptyList()
+    }
+}
 
 @Composable
 fun HomeActivity() {
@@ -346,6 +389,11 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     LaunchedEffect(movie.id) {
         scope.launch(Dispatchers.IO) {
             reviews = fetchReviews(movie.id)
+    var videos by remember { mutableStateOf<List<Video>>(emptyList()) }
+
+    LaunchedEffect(movie.id) {
+        scope.launch(Dispatchers.IO) {
+            videos = fetchMovieVideos(movie.id)
         }
     }
 
@@ -474,6 +522,14 @@ data class Review(
     val content: String
 )
 
+
+data class Video(
+    val id: String,
+    val name: String,
+    val site: String,
+    val key: String,
+    val url: String
+)
 
 val genreMap = mapOf(
     28 to "Action",
