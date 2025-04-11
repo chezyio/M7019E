@@ -407,6 +407,28 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Reviews",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            if (reviews.isEmpty()) {
+                Text(
+                    text = "No reviews available",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            } else {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(reviews) { review ->
+                        ReviewCard(review = review)
+                    }
+                }
+            }
         }
     }
 }
