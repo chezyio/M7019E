@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -78,15 +79,66 @@ suspend fun fetchPopularMovies(): List<Movie> {
     }
 }
 
+// GET 20 top rated movies from tmdb
+suspend fun fetchTopRatedMovies(): List<Movie> {
+    val apiKey = BuildConfig.TMDB_KEY
+    val url = "https://api.themoviedb.org/3/movie/top_rated?api_key=$apiKey&language=en-US&page=1"
+    val client = OkHttpClient()
+    val request = Request.Builder().url(url).build()
+
+    return try {
+        val response = client.newCall(request).execute()
+        val json = response.body?.string() ?: return emptyList()
+        val jsonObject = JSONObject(json)
+        val results = jsonObject.getJSONArray("results")
+        val movies = mutableListOf<Movie>()
+
+        for (i in 0 until minOf(results.length(), 20)) {
+            val movieJson = results.getJSONObject(i)
+            val genres = mutableListOf<Genre>()
+            val genreIds = movieJson.getJSONArray("genre_ids")
+            for (j in 0 until genreIds.length()) {
+                val genreId = genreIds.getInt(j)
+                val genreName = genreMap[genreId] ?: "Unknown"
+                genres.add(Genre(genreId, genreName))
+            }
+            movies.add(
+                Movie(
+                    adult = movieJson.optBoolean("adult", false),
+                    backdrop_path = movieJson.optString("backdrop_path", null),
+                    genres = genres,
+                    id = movieJson.getInt("id"),
+                    original_language = movieJson.getString("original_language"),
+                    original_title = movieJson.getString("original_title"),
+                    overview = movieJson.optString("overview", null),
+                    popularity = movieJson.getDouble("popularity"),
+                    poster_path = movieJson.optString("poster_path", null),
+                    release_date = movieJson.getString("release_date"),
+                    title = movieJson.getString("title"),
+                    video = movieJson.optBoolean("video", false),
+                    vote_average = movieJson.getDouble("vote_average"),
+                    vote_count = movieJson.getInt("vote_count")
+                )
+            )
+        }
+        movies
+    } catch (e: Exception) {
+        e.printStackTrace()
+        emptyList()
+    }
+}
+
 @Composable
 fun HomeActivity() {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
-    var movies by remember { mutableStateOf<List<Movie>>(emptyList()) }
+    var popularMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
+    var topRatedMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         scope.launch(Dispatchers.IO) {
-            movies = fetchPopularMovies()
+            popularMovies = fetchPopularMovies()
+            topRatedMovies = fetchTopRatedMovies()
         }
     }
 
@@ -97,7 +149,8 @@ fun HomeActivity() {
     ) {
         composable("movie_list") {
             MovieListScreen(
-                movies = movies,
+                popularMovies = popularMovies,
+                topRatedMovies = topRatedMovies,
                 onMovieClick = { movie ->
                     navController.navigate("movie_detail/${movie.id}")
                 }
@@ -105,7 +158,8 @@ fun HomeActivity() {
         }
         composable("movie_detail/{movieId}") { backStackEntry ->
             val movieId = backStackEntry.arguments?.getString("movieId")?.toIntOrNull()
-            val movie = movies.find { it.id == movieId }
+            val allMovies = popularMovies + topRatedMovies
+            val movie = allMovies.find { it.id == movieId }
             if (movie != null) {
                 MovieDetailScreen(
                     movie = movie,
@@ -124,24 +178,58 @@ fun HomeActivity() {
 }
 
 @Composable
-fun MovieListScreen(movies: List<Movie>, onMovieClick: (Movie) -> Unit) {
+fun MovieListScreen(
+    popularMovies: List<Movie>,
+    topRatedMovies: List<Movie>,
+    onMovieClick: (Movie) -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        if (movies.isEmpty()) {
+        if (popularMovies.isEmpty() && topRatedMovies.isEmpty()) {
             Text(
                 text = "Loading movies...",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
         } else {
-            MovieList(movies = movies, onMovieClick = onMovieClick)
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Popular Movies Section
+                item(span = { GridItemSpan(2) }) {
+                    Text(
+                        text = "Popular Movies",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+                items(popularMovies) { movie ->
+                    MovieCard(movie = movie, onClick = { onMovieClick(movie) })
+                }
+
+                // Top Rated Movies Section
+                item(span = { GridItemSpan(2) }) {
+                    Text(
+                        text = "Top Rated Movies",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+                items(topRatedMovies) { movie ->
+                    MovieCard(movie = movie, onClick = { onMovieClick(movie) })
+                }
+            }
         }
     }
 }
-
 @Composable
 fun MovieList(movies: List<Movie>, onMovieClick: (Movie) -> Unit) {
     LazyVerticalGrid(
