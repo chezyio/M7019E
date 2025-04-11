@@ -2,6 +2,7 @@ package com.m7019e.couchpotato
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.MediaStore
 import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,10 +22,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
+import com.google.android.exoplayer2.ExoPlayer
+import com.google.android.exoplayer2.ui.PlayerView
+import com.google.android.exoplayer2.MediaItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -158,6 +163,48 @@ suspend fun fetchReviews(movieId: Int): List<Review> {
     }
 }
 
+
+suspend fun fetchMovieVideos(movieId: Int): List<Video> {
+    val apiKey = BuildConfig.TMDB_KEY
+    val url = "https://api.themoviedb.org/3/movie/$movieId/videos?api_key=$apiKey&language=en-US"
+    val client = OkHttpClient()
+    val request = Request.Builder().url(url).build()
+
+    return try {
+        val response = client.newCall(request).execute()
+        val json = response.body?.string() ?: return emptyList()
+        val jsonObject = JSONObject(json)
+        val results = jsonObject.getJSONArray("results")
+        val videos = mutableListOf<Video>()
+
+        for (i in 0 until results.length()) {
+            val videoJson = results.getJSONObject(i)
+            val site = videoJson.getString("site")
+            val key = videoJson.getString("key")
+            val videoUrl = when (site) {
+                "YouTube" -> "https://www.youtube.com/watch?v=$key"
+                "Vimeo" -> "https://vimeo.com/$key"
+                else -> null
+            }
+            videoUrl?.let {
+                videos.add(
+                    Video(
+                        id = videoJson.getString("id"),
+                        name = videoJson.getString("name"),
+                        site = site,
+                        key = key,
+                        url = it
+                    )
+                )
+            }
+        }
+        Log.d("TMDB — GET TRAILERS", videos.toString())
+        videos
+    } catch (e: Exception) {
+        e.printStackTrace()
+        emptyList()
+    }
+}
 
 @Composable
 fun HomeActivity() {
@@ -346,6 +393,11 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     LaunchedEffect(movie.id) {
         scope.launch(Dispatchers.IO) {
             reviews = fetchReviews(movie.id)
+    var videos by remember { mutableStateOf<List<Video>>(emptyList()) }
+
+    LaunchedEffect(movie.id) {
+        scope.launch(Dispatchers.IO) {
+            videos = fetchMovieVideos(movie.id)
         }
     }
 
@@ -409,6 +461,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Reviews",
+                text = "Trailers",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -416,6 +469,9 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
             if (reviews.isEmpty()) {
                 Text(
                     text = "No reviews available",
+            if (videos.isEmpty()) {
+                Text(
+                    text = "No videos available",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -426,6 +482,8 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                 ) {
                     items(reviews) { review ->
                         ReviewCard(review = review)
+                    items(videos) { video ->
+                        VideoCard(video = video)
                     }
                 }
             }
@@ -438,6 +496,27 @@ fun ReviewCard(review: Review) {
     Card(
         modifier = Modifier
             .width(250.dp),
+
+@Composable
+fun VideoCard(video: Video) {
+    val context = LocalContext.current
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(video.url))
+            prepare()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            exoPlayer.release()
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .width(300.dp)
+            .fillMaxHeight(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -451,6 +530,7 @@ fun ReviewCard(review: Review) {
         ) {
             Text(
                 text = review.author,
+                text = video.name,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -464,6 +544,28 @@ fun ReviewCard(review: Review) {
                 maxLines = 5,
                 overflow = TextOverflow.Ellipsis
             )
+            AndroidView(
+                factory = {
+                    PlayerView(context).apply {
+                        player = exoPlayer
+                    }
+                },
+                modifier = Modifier
+                    .height(180.dp)
+                    .fillMaxWidth()
+            )
+            if (video.site == "YouTube") {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(video.url))
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Open in YouTube")
+                }
+            }
         }
     }
 }
@@ -474,6 +576,14 @@ data class Review(
     val content: String
 )
 
+
+data class Video(
+    val id: String,
+    val name: String,
+    val site: String,
+    val key: String,
+    val url: String
+)
 
 val genreMap = mapOf(
     28 to "Action",
