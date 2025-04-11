@@ -424,6 +424,28 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Trailers",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            if (videos.isEmpty()) {
+                Text(
+                    text = "No videos available",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            } else {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(videos) { video ->
+                        VideoCard(video = video)
+                    }
+                }
+            }
         }
     }
 }
