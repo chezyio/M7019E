@@ -22,18 +22,18 @@ android {
         }
 
         // load the values from .properties file
-//        val keystoreFile = project.rootProject.file("local.properties")
-//        val properties = Properties()
-//        properties.load(keystoreFile.inputStream())
-//
-//        // return empty key in case something goes wrong
-//        val apiKey = properties.getProperty("TMDB_KEY") ?: ""
-//
-//        buildConfigField(
-//            type = "String",
-//            name = "TMDB_KEY",
-//            value = apiKey
-//        )
+        val keystoreFile = project.rootProject.file("local.properties")
+        val properties = Properties()
+        properties.load(keystoreFile.inputStream())
+
+        // Return empty key in case something goes wrong
+        val apiKey = properties.getProperty("TMDB_KEY") ?: ""
+
+        buildConfigField(
+            type = "String",
+            name = "TMDB_KEY",
+            value = "\"$apiKey\""
+        )
     }
 
     buildTypes {
@@ -54,6 +54,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.1"
