@@ -2,6 +2,7 @@ package com.m7019e.couchpotato
 
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -12,6 +13,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -309,7 +312,7 @@ fun MovieCard(movie: Movie, onClick: () -> Unit) {
 @Composable
 fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     val context = LocalContext.current
-
+    var isFavorite by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -326,6 +329,17 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back",
                             tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        Log.d("FAVOURITES", "clicked")
+                    }) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
                     }
                 },
