@@ -411,6 +411,42 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     }
 }
 
+@Composable
+fun ReviewCard(review: Review) {
+    Card(
+        modifier = Modifier
+            .width(250.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxSize()
+        ) {
+            Text(
+                text = review.author,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = review.content,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 5,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+
 data class Review(
     val author: String,
     val content: String
