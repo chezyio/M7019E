@@ -1,5 +1,6 @@
 package com.m7019e.couchpotato
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
@@ -18,6 +19,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -36,6 +39,7 @@ import androidx.compose.ui.zIndex
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.room.Room
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -43,9 +47,18 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import com.m7019e.couchpotato.BuildConfig
+import com.m7019e.couchpotato.database.AppDatabase
 
 private const val TAG = "CouchPotato"
 
+
+fun getDatabase(context: Context): AppDatabase {
+    return Room.databaseBuilder(
+        context.applicationContext,
+        AppDatabase::class.java,
+        "CouchPotatoDB"
+    ).build()
+}
 suspend fun fetchPopularMovies(): List<Movie> {
     val apiKey = BuildConfig.TMDB_KEY
     val url = "https://api.themoviedb.org/3/movie/popular?api_key=$apiKey&language=en-US&page=1"
@@ -326,6 +339,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     val density = LocalDensity.current
     val threshold = with(density) { 400.dp.toPx() }
     val opacity = (scrollState.value / threshold).coerceIn(0f, 1f)
+    var isFavorite by remember { mutableStateOf(false) }
 
     LaunchedEffect(movie.id) {
         scope.launch(Dispatchers.IO) {
@@ -344,6 +358,17 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back",
                             tint = Color.White // White for contrast
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        Log.d("FAVOURITES", "clicked")
+                    }) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
                     }
                 },
@@ -378,8 +403,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                             ?: "https://image.tmdb.org/t/p/w500${movie.poster_path}",
                         contentDescription = "${movie.title} cover",
                         modifier = Modifier
-                            .fillMaxSize()
-                            .clip(MaterialTheme.shapes.medium),
+                            .fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
 
