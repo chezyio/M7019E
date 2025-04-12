@@ -2,8 +2,9 @@ package com.m7019e.couchpotato
 
 import android.content.Intent
 import android.net.Uri
-import android.provider.MediaStore
 import android.util.Log
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -29,16 +30,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
-import com.google.android.exoplayer2.ExoPlayer
-import com.google.android.exoplayer2.ui.PlayerView
-import com.google.android.exoplayer2.MediaItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import com.m7019e.couchpotato.BuildConfig
 
-// GET 20 popular movies from tmdb
+private const val TAG = "CouchPotato"
+
+// Fetch functions (updated with logging)
 suspend fun fetchPopularMovies(): List<Movie> {
     val apiKey = BuildConfig.TMDB_KEY
     val url = "https://api.themoviedb.org/3/movie/popular?api_key=$apiKey&language=en-US&page=1"
@@ -80,14 +81,14 @@ suspend fun fetchPopularMovies(): List<Movie> {
                 )
             )
         }
+        Log.i(TAG, "Fetched ${movies.size} popular movies")
         movies
     } catch (e: Exception) {
-        e.printStackTrace()
+        Log.e(TAG, "Error fetching popular movies: ${e.message}")
         emptyList()
     }
 }
 
-// GET 20 top rated movies from tmdb
 suspend fun fetchTopRatedMovies(): List<Movie> {
     val apiKey = BuildConfig.TMDB_KEY
     val url = "https://api.themoviedb.org/3/movie/top_rated?api_key=$apiKey&language=en-US&page=1"
@@ -129,13 +130,14 @@ suspend fun fetchTopRatedMovies(): List<Movie> {
                 )
             )
         }
+        Log.i(TAG, "Fetched ${movies.size} top-rated movies")
         movies
     } catch (e: Exception) {
-        e.printStackTrace()
+        Log.e(TAG, "Error fetching top-rated movies: ${e.message}")
         emptyList()
     }
 }
-// GET reviews for movie from tmdb
+
 suspend fun fetchReviews(movieId: Int): List<Review> {
     val apiKey = BuildConfig.TMDB_KEY
     val url = "https://api.themoviedb.org/3/movie/$movieId/reviews?api_key=$apiKey&language=en-US&page=1"
@@ -158,13 +160,13 @@ suspend fun fetchReviews(movieId: Int): List<Review> {
                 )
             )
         }
-        Log.d("TMDB — GET REVIEWS", reviews.toString())
+        Log.d(TAG, "Fetched ${reviews.size} reviews for movie $movieId")
         reviews
     } catch (e: Exception) {
+        Log.e(TAG, "Error fetching reviews for movie $movieId: ${e.message}")
         emptyList()
     }
 }
-
 
 suspend fun fetchMovieVideos(movieId: Int): List<Video> {
     val apiKey = BuildConfig.TMDB_KEY
@@ -200,10 +202,10 @@ suspend fun fetchMovieVideos(movieId: Int): List<Video> {
                 )
             }
         }
-        Log.d("TMDB — GET TRAILERS", videos.toString())
+        Log.d(TAG, "Fetched ${videos.size} videos for movie $movieId")
         videos
     } catch (e: Exception) {
-        e.printStackTrace()
+        Log.e(TAG, "Error fetching videos for movie $movieId: ${e.message}")
         emptyList()
     }
 }
@@ -281,7 +283,6 @@ fun MovieListScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Popular Movies Section
                 item(span = { GridItemSpan(2) }) {
                     Text(
                         text = "Popular Movies",
@@ -294,7 +295,6 @@ fun MovieListScreen(
                     MovieCard(movie = movie, onClick = { onMovieClick(movie) })
                 }
 
-                // Top Rated Movies Section
                 item(span = { GridItemSpan(2) }) {
                     Text(
                         text = "Top Rated Movies",
@@ -307,18 +307,6 @@ fun MovieListScreen(
                     MovieCard(movie = movie, onClick = { onMovieClick(movie) })
                 }
             }
-        }
-    }
-}
-@Composable
-fun MovieList(movies: List<Movie>, onMovieClick: (Movie) -> Unit) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        items(movies) { movie ->
-            MovieCard(movie = movie, onClick = { onMovieClick(movie) })
         }
     }
 }
@@ -506,7 +494,6 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     }
 }
 
-
 @Composable
 fun ReviewCard(review: Review) {
     Card(
@@ -545,17 +532,16 @@ fun ReviewCard(review: Review) {
 @Composable
 fun VideoCard(video: Video) {
     val context = LocalContext.current
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(video.url))
-            prepare()
-        }
-    }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            exoPlayer.release()
-        }
+    // Only handle YouTube videos
+    if (video.site != "YouTube") {
+        Text(
+            text = "${video.name} (Unsupported platform: ${video.site})",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(12.dp)
+        )
+        return
     }
 
     Card(
@@ -582,37 +568,51 @@ fun VideoCard(video: Video) {
             )
             Spacer(modifier = Modifier.height(8.dp))
             AndroidView(
-                factory = {
-                    PlayerView(context).apply {
-                        player = exoPlayer
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        webViewClient = WebViewClient()
+                        val html = """
+                            <html>
+                                <body>
+                                    <iframe 
+                                        width="100%" 
+                                        height="180" 
+                                        src="https://www.youtube.com/embed/${video.key}?enablejsapi=1" 
+                                        frameborder="0" 
+                                        allowfullscreen>
+                                    </iframe>
+                                </body>
+                            </html>
+                        """.trimIndent()
+                        Log.d(TAG, "Loading YouTube video: ${video.key}")
+                        loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "UTF-8", null)
                     }
                 },
                 modifier = Modifier
                     .height(180.dp)
                     .fillMaxWidth()
             )
-            if (video.site == "YouTube") {
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(video.url))
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Open in YouTube")
-                }
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(video.url))
+                    context.startActivity(intent)
+                    Log.d(TAG, "Opening YouTube video in app: ${video.url}")
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Open in YouTube")
             }
         }
     }
 }
 
-
 data class Review(
     val author: String,
     val content: String
 )
-
 
 data class Video(
     val id: String,
