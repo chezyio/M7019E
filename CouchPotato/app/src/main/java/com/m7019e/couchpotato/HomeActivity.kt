@@ -4,9 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -41,6 +38,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.room.Room
 import coil.compose.AsyncImage
+import com.m7019e.couchpotato.database.AppDatabase
+import com.m7019e.couchpotato.database.MovieEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -59,6 +58,8 @@ fun getDatabase(context: Context): AppDatabase {
         "CouchPotatoDB"
     ).build()
 }
+
+// GET 20 popular movies from tmdb
 suspend fun fetchPopularMovies(): List<Movie> {
     val apiKey = BuildConfig.TMDB_KEY
     val url = "https://api.themoviedb.org/3/movie/popular?api_key=$apiKey&language=en-US&page=1"
@@ -235,7 +236,6 @@ fun HomeActivity() {
     val scope = rememberCoroutineScope()
     var popularMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var topRatedMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
-
     LaunchedEffect(Unit) {
         scope.launch(Dispatchers.IO) {
             popularMovies = fetchPopularMovies()
@@ -265,6 +265,7 @@ fun HomeActivity() {
                 MovieDetailScreen(
                     movie = movie,
                     onBackClick = { navController.popBackStack() }
+                    // inssert db here
                 )
             } else {
                 Text(
@@ -560,6 +561,84 @@ data class Video(
     val key: String,
     val url: String
 )
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
+    val context = LocalContext.current
+    var isFavorite by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = movie.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        Log.d("FAVOURITES", "clicked")
+                    }) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Genres: ${movie.genres.joinToString { it.name }}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Overview: ${movie.overview ?: "N/A"}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Release Date: ${movie.release_date}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Rating: ${movie.vote_average}/10",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
 
 val genreMap = mapOf(
     28 to "Action",
