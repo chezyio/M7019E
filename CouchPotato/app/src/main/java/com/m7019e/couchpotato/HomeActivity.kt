@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -20,12 +21,18 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -39,7 +46,6 @@ import com.m7019e.couchpotato.BuildConfig
 
 private const val TAG = "CouchPotato"
 
-// Fetch functions (updated with logging)
 suspend fun fetchPopularMovies(): List<Movie> {
     val apiKey = BuildConfig.TMDB_KEY
     val url = "https://api.themoviedb.org/3/movie/popular?api_key=$apiKey&language=en-US&page=1"
@@ -309,65 +315,6 @@ fun MovieListScreen(
         }
     }
 }
-
-@Composable
-fun MovieCard(movie: Movie, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(260.dp)
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            AsyncImage(
-                model = "https://image.tmdb.org/t/p/w500${movie.poster_path}",
-                contentDescription = "${movie.title} poster",
-                modifier = Modifier
-                    .fillMaxHeight(),
-                contentScale = ContentScale.Crop
-            )
-//            Column(
-//                modifier = Modifier
-//                    .padding(16.dp)
-//                    .fillMaxWidth()
-//            ) {
-//                Text(
-//                    text = movie.title,
-//                    style = MaterialTheme.typography.titleMedium,
-//                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-//                    maxLines = 2,
-//                )
-//                Spacer(modifier = Modifier.height(8.dp))
-//                Row(
-//                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-//                    modifier = Modifier.fillMaxWidth()
-//                ) {
-//                    movie.genres.forEach { genre ->
-//                        Surface(
-//                            shape = MaterialTheme.shapes.small,
-//                            color = MaterialTheme.colorScheme.secondaryContainer,
-//                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-//                        ) {
-//                            Text(
-//                                text = genre.name,
-//                                style = MaterialTheme.typography.labelLarge,
-//                                maxLines = 1,
-//                                overflow = TextOverflow.Ellipsis
-//                            )
-//                        }
-//                    }
-//                }
-            }
-        }
-    }
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
@@ -375,6 +322,10 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     val scope = rememberCoroutineScope()
     var reviews by remember { mutableStateOf<List<Review>>(emptyList()) }
     var videos by remember { mutableStateOf<List<Video>>(emptyList()) }
+    val scrollState = rememberScrollState()
+    val density = LocalDensity.current
+    val threshold = with(density) { 400.dp.toPx() }
+    val opacity = (scrollState.value / threshold).coerceIn(0f, 1f)
 
     LaunchedEffect(movie.id) {
         scope.launch(Dispatchers.IO) {
@@ -386,272 +337,188 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        text = movie.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                },
+                title = { /* null */ },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onSurface
+                            tint = Color.White // White for contrast
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-                )
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = opacity),
+                    navigationIconContentColor = Color.White
+                ),
+                modifier = Modifier
+                    .zIndex(1f)
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = Color.Transparent,
+        modifier = Modifier.background(MaterialTheme.colorScheme.background)
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState())
         ) {
-            // Genres
-            Text(
-                text = "Genres",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                movie.genres.forEach { genre ->
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = genre.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Overview
-            Text(
-                text = "Overview",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = movie.overview ?: "N/A",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Release Date
-            Text(
-                text = "Release Date",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = movie.release_date,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Rating
-            Text(
-                text = "Rating",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "${movie.vote_average}/10",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Reviews
-            Text(
-                text = "Reviews",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            if (reviews.isEmpty()) {
-                Text(
-                    text = "No reviews available",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            } else {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(reviews) { review ->
-                        ReviewCard(review = review)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Trailers
-            Text(
-                text = "Trailers",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            if (videos.isEmpty()) {
-                Text(
-                    text = "No trailers available",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            } else {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(videos) { video ->
-                        VideoCard(video = video)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ReviewCard(review: Review) {
-    Card(
-        modifier = Modifier
-            .width(250.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxSize()
-        ) {
-            Text(
-                text = review.author,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = review.content,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 5,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-fun VideoCard(video: Video) {
-    val context = LocalContext.current
-
-    // Only handle YouTube videos
-    if (video.site != "YouTube") {
-        Text(
-            text = "${video.name} (Unsupported platform: ${video.site})",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(12.dp)
-        )
-        return
-    }
-
-    Card(
-        modifier = Modifier
-            .width(300.dp)
-            .fillMaxHeight(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxSize()
-        ) {
-            Text(
-                text = video.name,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            AndroidView(
-                factory = { ctx ->
-                    WebView(ctx).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        webViewClient = WebViewClient()
-                        val html = """
-                            <html>
-                                <body>
-                                    <iframe 
-                                        width="100%" 
-                                        height="180" 
-                                        src="https://www.youtube.com/embed/${video.key}?enablejsapi=1" 
-                                        frameborder="0" 
-                                        allowfullscreen>
-                                    </iframe>
-                                </body>
-                            </html>
-                        """.trimIndent()
-                        Log.d(TAG, "Loading YouTube video: ${video.key}")
-                        loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "UTF-8", null)
-                    }
-                },
+            Column(
                 modifier = Modifier
-                    .height(180.dp)
-                    .fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(video.url))
-                    context.startActivity(intent)
-                    Log.d(TAG, "Opening YouTube video in app: ${video.url}")
-                },
-                modifier = Modifier.fillMaxWidth()
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
             ) {
-                Text("Open in YouTube")
+                // Cover Image
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(350.dp)
+                ) {
+                    AsyncImage(
+                        model = movie.backdrop_path?.let { "https://image.tmdb.org/t/p/w780$it" }
+                            ?: "https://image.tmdb.org/t/p/w500${movie.poster_path}",
+                        contentDescription = "${movie.title} cover",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(MaterialTheme.shapes.medium),
+                        contentScale = ContentScale.Crop
+                    )
+
+                    // gradient overlay
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        MaterialTheme.colorScheme.background
+                                    ),
+                                    startY = 0.2f * 500f,
+                                    endY = 900f
+                                )
+                            )
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp)
+                        .padding(top = paddingValues.calculateTopPadding())
+                ) {
+                    Text(
+                        text = movie.title,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        movie.genres.forEach { genre ->
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = genre.name,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = movie.overview ?: "N/A",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Release Date",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = movie.release_date,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Rating",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${movie.vote_average}/10",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Reviews",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (reviews.isEmpty()) {
+                        Text(
+                            text = "No reviews available",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    } else {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(reviews) { review ->
+                                ReviewCard(review = review)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Trailers",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (videos.isEmpty()) {
+                        Text(
+                            text = "No trailers available",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    } else {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(videos) { video ->
+                                VideoCard(video = video)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
