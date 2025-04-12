@@ -286,7 +286,7 @@ fun MovieListScreen(
                 item(span = { GridItemSpan(2) }) {
                     Text(
                         text = "Popular Movies",
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
@@ -294,11 +294,10 @@ fun MovieListScreen(
                 items(popularMovies) { movie ->
                     MovieCard(movie = movie, onClick = { onMovieClick(movie) })
                 }
-
                 item(span = { GridItemSpan(2) }) {
                     Text(
                         text = "Top Rated Movies",
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
@@ -316,7 +315,7 @@ fun MovieCard(movie: Movie, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp)
+            .height(260.dp)
             .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(
@@ -331,49 +330,45 @@ fun MovieCard(movie: Movie, onClick: () -> Unit) {
                 model = "https://image.tmdb.org/t/p/w500${movie.poster_path}",
                 contentDescription = "${movie.title} poster",
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp),
+                    .fillMaxHeight(),
                 contentScale = ContentScale.Crop
             )
-            Column(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth()
-            ) {
-                Text(
-                    text = movie.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    movie.genres.forEach { genre ->
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ) {
-                            Text(
-                                text = genre.name,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
+//            Column(
+//                modifier = Modifier
+//                    .padding(16.dp)
+//                    .fillMaxWidth()
+//            ) {
+//                Text(
+//                    text = movie.title,
+//                    style = MaterialTheme.typography.titleMedium,
+//                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+//                    maxLines = 2,
+//                )
+//                Spacer(modifier = Modifier.height(8.dp))
+//                Row(
+//                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+//                    modifier = Modifier.fillMaxWidth()
+//                ) {
+//                    movie.genres.forEach { genre ->
+//                        Surface(
+//                            shape = MaterialTheme.shapes.small,
+//                            color = MaterialTheme.colorScheme.secondaryContainer,
+//                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+//                        ) {
+//                            Text(
+//                                text = genre.name,
+//                                style = MaterialTheme.typography.labelLarge,
+//                                maxLines = 1,
+//                                overflow = TextOverflow.Ellipsis
+//                            )
+//                        }
+//                    }
+//                }
             }
         }
     }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     val context = LocalContext.current
@@ -423,33 +418,84 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
+            // Genres
             Text(
-                text = "Genres: ${movie.genres.joinToString { it.name }}",
-                style = MaterialTheme.typography.bodyLarge,
+                text = "Genres",
+                style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                movie.genres.forEach { genre ->
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = genre.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Overview
             Text(
-                text = "Overview: ${movie.overview ?: "N/A"}",
+                text = "Overview",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = movie.overview ?: "N/A",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Release Date
+            Text(
+                text = "Release Date",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = movie.release_date,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Rating
             Text(
-                text = "Release Date: ${movie.release_date}",
+                text = "Rating",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${movie.vote_average}/10",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Rating: ${movie.vote_average}/10",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Reviews
             Text(
                 text = "Reviews",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
             if (reviews.isEmpty()) {
@@ -468,10 +514,12 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Trailers
             Text(
                 text = "Trailers",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
             if (videos.isEmpty()) {
