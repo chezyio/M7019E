@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -18,6 +20,20 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // load the values from .properties file
+        val keystoreFile = project.rootProject.file("local.properties")
+        val properties = Properties()
+        properties.load(keystoreFile.inputStream())
+
+        // Return empty key in case something goes wrong
+        val apiKey = properties.getProperty("TMDB_KEY") ?: ""
+
+        buildConfigField(
+            type = "String",
+            name = "TMDB_KEY",
+            value = "\"$apiKey\""
+        )
     }
 
     buildTypes {
@@ -38,6 +54,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.1"
@@ -60,6 +77,11 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+//    implementation("com.google.android.exoplayer:exoplayer:2.19.1")
+//    implementation("androidx.media3:media3-exoplayer:1.2.0")
+//    implementation("androidx.media3:media3-ui:1.2.0")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
