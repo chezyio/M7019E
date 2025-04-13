@@ -2,8 +2,13 @@ package com.m7019e.couchpotato
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.Uri
 import android.util.Log
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,6 +28,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -30,12 +36,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat.getSystemService
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -53,6 +61,13 @@ import com.m7019e.couchpotato.database.MovieDAO
 import kotlinx.coroutines.flow.first
 
 private const val TAG = "CouchPotato"
+
+fun isNetworkConnected(context: Context): Boolean {
+    val connectivityManager = getSystemService(context, ConnectivityManager::class.java)
+    val network = connectivityManager?.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+}
 
 
 fun getDatabase(context: Context): AppDatabase {
@@ -246,6 +261,7 @@ suspend fun fetchFavoriteMovies(dao: MovieDAO): List<Movie> {
         emptyList()
     }
 }
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 
 fun HomeActivity() {
@@ -257,19 +273,58 @@ fun HomeActivity() {
     var topRatedMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var favoriteMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var selectedCategory by remember { mutableStateOf("Popular Movies") }
+    var cachedMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
+    var viewType by remember { mutableStateOf("Popular Movies") }
+    var isConnected by remember { mutableStateOf(isNetworkConnected(context)) }
 
-    // Fetch API movies on launch
-    LaunchedEffect(Unit) {
-        scope.launch(Dispatchers.IO) {
-            popularMovies = fetchPopularMovies()
-            topRatedMovies = fetchTopRatedMovies()
+    // check for network connection
+    DisposableEffect(Unit) {
+        val connectivityManager = getSystemService(context, ConnectivityManager::class.java)
+        val networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                scope.launch(Dispatchers.Main) {
+                    isConnected = true
+                    Log.i(TAG, "Network connected")
+                }
+            }
+
+            override fun onLost(network: Network) {
+                scope.launch(Dispatchers.Main) {
+                    isConnected = false
+                    Log.i(TAG, "Network disconnected")
+                }
+            }
+        }
+        val networkRequest = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        connectivityManager?.registerNetworkCallback(networkRequest, networkCallback)
+        onDispose {
+            connectivityManager?.unregisterNetworkCallback(networkCallback)
         }
     }
 
-    LaunchedEffect(selectedCategory) {
-        if (selectedCategory == "Favorite Movies") {
-            scope.launch(Dispatchers.IO) {
-                favoriteMovies = fetchFavoriteMovies(db.movieDao())
+    // combine launch effect to include connectivity status
+    LaunchedEffect(viewType, isConnected) {
+        scope.launch(Dispatchers.IO) {
+            when (viewType) {
+                "Popular Movies" -> {
+                    if (isConnected) {
+                        cachedMovies = fetchPopularMovies()
+                    } else {
+                        cachedMovies = emptyList()
+                    }
+                }
+                "Top Rated Movies" -> {
+                    if (isConnected) {
+                        cachedMovies = fetchTopRatedMovies()
+                    } else {
+                        cachedMovies = emptyList()
+                    }
+                }
+                "Favorite Movies" -> {
+                    cachedMovies = fetchFavoriteMovies(db.movieDao())
+                }
             }
         }
     }
@@ -281,35 +336,31 @@ fun HomeActivity() {
     ) {
         composable("movie_list") {
             Scaffold(
-//                topBar = {
-//                    TopAppBar(
-//                        title = {
-//                            Text(
-//                                text = "Couch Potato",
-//                                style = MaterialTheme.typography.headlineSmall,
-//                                color = MaterialTheme.colorScheme.onSurface,
-//                                maxLines = 1,
-//                                overflow = TextOverflow.Ellipsis
-//                            )
-//                        },
-//                        colors = TopAppBarDefaults.topAppBarColors(
-//                            containerColor = MaterialTheme.colorScheme.surface,
-//                            titleContentColor = MaterialTheme.colorScheme.onSurface
-//                        )
-//                    )
-//                },
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                text = "Couch Potato",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            titleContentColor = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                },
                 containerColor = MaterialTheme.colorScheme.background
-            )
-            { paddingValues ->
+            ) { paddingValues ->
                 MovieListScreen(
-                    movies = when (selectedCategory) {
-                        "Top Rated Movies" -> topRatedMovies
-                        "Favorite Movies" -> favoriteMovies
-                        else -> popularMovies
-                    },
-                    selectedCategory = selectedCategory,
+                    movies = cachedMovies,
+                    selectedCategory = viewType,
+                    isConnected = isConnected,
                     onCategorySelected = { newCategory ->
-                        selectedCategory = newCategory
+                        viewType = newCategory
                     },
                     onMovieClick = { movie ->
                         navController.navigate("movie_detail/${movie.id}")
@@ -320,13 +371,13 @@ fun HomeActivity() {
         }
         composable("movie_detail/{movieId}") { backStackEntry ->
             val movieId = backStackEntry.arguments?.getString("movieId")?.toIntOrNull()
-            val allMovies = popularMovies + topRatedMovies + favoriteMovies
-            val movie = allMovies.find { it.id == movieId }
+            val movie = cachedMovies.find { it.id == movieId }
             if (movie != null) {
                 MovieDetailScreen(
                     movie = movie,
                     onBackClick = { navController.popBackStack() },
-                    db = db
+                    db = db,
+//                    isConnected = isConnected
                 )
             } else {
                 Text(
@@ -346,7 +397,8 @@ fun MovieListScreen(
     selectedCategory: String,
     onCategorySelected: (String) -> Unit,
     onMovieClick: (Movie) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isConnected: Boolean,
 ) {
     Column(
         modifier = modifier
@@ -375,11 +427,38 @@ fun MovieListScreen(
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
-        if (movies.isEmpty()) {
+        // movie Grid or no connection
+        if (movies.isEmpty() && !isConnected && selectedCategory != "Favorite Movies") {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.baseline_signal_wifi_connected_no_internet_4_24),
+                    contentDescription = "No internet connection",
+                    modifier = Modifier
+                        .size(200.dp)
+                        .clip(MaterialTheme.shapes.medium),
+                    contentScale = ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "No Internet Connection",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        } else if (movies.isEmpty() && selectedCategory == "Favorite Movies") {
             Text(
-                text = "No movies available",
+                text = "No favorite movies",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .padding(top = 16.dp)
+                    .align(Alignment.CenterHorizontally)
             )
         } else {
             LazyVerticalGrid(
@@ -388,6 +467,7 @@ fun MovieListScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(top = 8.dp)
             ) {
                 items(movies) { movie ->
                     MovieCard(movie = movie, onClick = { onMovieClick(movie) })
