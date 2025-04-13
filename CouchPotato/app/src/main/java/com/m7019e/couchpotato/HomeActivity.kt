@@ -275,6 +275,7 @@ fun HomeActivity() {
     var selectedCategory by remember { mutableStateOf("Popular Movies") }
     var cachedMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var viewType by remember { mutableStateOf("Popular Movies") }
+    var cachedViewType by remember { mutableStateOf("Popular Movies") }
     var isConnected by remember { mutableStateOf(isNetworkConnected(context)) }
 
     // check for network connection
@@ -304,22 +305,24 @@ fun HomeActivity() {
         }
     }
 
-    // combine launch effect to include connectivity status
+    // combine launch effect to fetch movies when viewType changes or internet reconnects
     LaunchedEffect(viewType, isConnected) {
         scope.launch(Dispatchers.IO) {
+            // Clear cache when viewType changes
+            if (viewType != cachedViewType) {
+                cachedMovies = emptyList()
+                cachedViewType = viewType
+            }
+            // Fetch based on viewType
             when (viewType) {
                 "Popular Movies" -> {
-                    if (isConnected) {
+                    if (isConnected && cachedMovies.isEmpty()) {
                         cachedMovies = fetchPopularMovies()
-                    } else {
-                        cachedMovies = emptyList()
                     }
                 }
                 "Top Rated Movies" -> {
-                    if (isConnected) {
+                    if (isConnected && cachedMovies.isEmpty()) {
                         cachedMovies = fetchTopRatedMovies()
-                    } else {
-                        cachedMovies = emptyList()
                     }
                 }
                 "Favorite Movies" -> {
@@ -358,6 +361,7 @@ fun HomeActivity() {
                 MovieListScreen(
                     movies = cachedMovies,
                     selectedCategory = viewType,
+                    cachedViewType = cachedViewType,
                     isConnected = isConnected,
                     onCategorySelected = { newCategory ->
                         viewType = newCategory
@@ -399,6 +403,7 @@ fun MovieListScreen(
     onMovieClick: (Movie) -> Unit,
     modifier: Modifier = Modifier,
     isConnected: Boolean,
+    cachedViewType: String,
 ) {
     Column(
         modifier = modifier
@@ -427,8 +432,29 @@ fun MovieListScreen(
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
-        // movie Grid or no connection
-        if (movies.isEmpty() && !isConnected && selectedCategory != "Favorite Movies") {
+        if (movies.isNotEmpty() && selectedCategory == cachedViewType) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 8.dp)
+            ) {
+                items(movies) { movie ->
+                    MovieCard(movie = movie, onClick = { onMovieClick(movie) })
+                }
+            }
+        } else if (selectedCategory == "Favorite Movies" && movies.isEmpty()) {
+            Text(
+                text = "No favorite movies",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .padding(top = 16.dp)
+                    .align(Alignment.CenterHorizontally)
+            )
+        } else if (!isConnected && selectedCategory != "Favorite Movies") {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -450,28 +476,6 @@ fun MovieListScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-            }
-        } else if (movies.isEmpty() && selectedCategory == "Favorite Movies") {
-            Text(
-                text = "No favorite movies",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .padding(top = 16.dp)
-                    .align(Alignment.CenterHorizontally)
-            )
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 8.dp)
-            ) {
-                items(movies) { movie ->
-                    MovieCard(movie = movie, onClick = { onMovieClick(movie) })
-                }
             }
         }
     }
