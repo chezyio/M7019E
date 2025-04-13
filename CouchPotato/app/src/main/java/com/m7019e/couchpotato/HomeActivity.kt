@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -13,9 +14,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
@@ -46,7 +49,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import com.m7019e.couchpotato.BuildConfig
-import com.m7019e.couchpotato.database.AppDatabase
+import com.m7019e.couchpotato.database.MovieDAO
+import kotlinx.coroutines.flow.first
 
 private const val TAG = "CouchPotato"
 
@@ -230,16 +234,43 @@ suspend fun fetchMovieVideos(movieId: Int): List<Video> {
     }
 }
 
+suspend fun fetchFavoriteMovies(dao: MovieDAO): List<Movie> {
+    return try {
+        dao.getAllFavoriteMovies().first().map { entity ->
+            entity.toMovie()
+        }.also {
+            Log.i(TAG, "Fetched ${it.size} favorite movies")
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Error fetching favorite movies: ${e.message}")
+        emptyList()
+    }
+}
 @Composable
+
 fun HomeActivity() {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val db = remember { getDatabase(context) }
     var popularMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var topRatedMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
+    var favoriteMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
+    var selectedCategory by remember { mutableStateOf("Popular Movies") }
+
+    // Fetch API movies on launch
     LaunchedEffect(Unit) {
         scope.launch(Dispatchers.IO) {
             popularMovies = fetchPopularMovies()
             topRatedMovies = fetchTopRatedMovies()
+        }
+    }
+
+    LaunchedEffect(selectedCategory) {
+        if (selectedCategory == "Favorite Movies") {
+            scope.launch(Dispatchers.IO) {
+                favoriteMovies = fetchFavoriteMovies(db.movieDao())
+            }
         }
     }
 
@@ -249,23 +280,53 @@ fun HomeActivity() {
         modifier = Modifier.fillMaxSize()
     ) {
         composable("movie_list") {
-            MovieListScreen(
-                popularMovies = popularMovies,
-                topRatedMovies = topRatedMovies,
-                onMovieClick = { movie ->
-                    navController.navigate("movie_detail/${movie.id}")
-                }
+            Scaffold(
+//                topBar = {
+//                    TopAppBar(
+//                        title = {
+//                            Text(
+//                                text = "Couch Potato",
+//                                style = MaterialTheme.typography.headlineSmall,
+//                                color = MaterialTheme.colorScheme.onSurface,
+//                                maxLines = 1,
+//                                overflow = TextOverflow.Ellipsis
+//                            )
+//                        },
+//                        colors = TopAppBarDefaults.topAppBarColors(
+//                            containerColor = MaterialTheme.colorScheme.surface,
+//                            titleContentColor = MaterialTheme.colorScheme.onSurface
+//                        )
+//                    )
+//                },
+                containerColor = MaterialTheme.colorScheme.background
             )
+            { paddingValues ->
+                MovieListScreen(
+                    movies = when (selectedCategory) {
+                        "Top Rated Movies" -> topRatedMovies
+                        "Favorite Movies" -> favoriteMovies
+                        else -> popularMovies
+                    },
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = { newCategory ->
+                        selectedCategory = newCategory
+                    },
+                    onMovieClick = { movie ->
+                        navController.navigate("movie_detail/${movie.id}")
+                    },
+                    modifier = Modifier.padding(paddingValues)
+                )
+            }
         }
         composable("movie_detail/{movieId}") { backStackEntry ->
             val movieId = backStackEntry.arguments?.getString("movieId")?.toIntOrNull()
-            val allMovies = popularMovies + topRatedMovies
+            val allMovies = popularMovies + topRatedMovies + favoriteMovies
             val movie = allMovies.find { it.id == movieId }
             if (movie != null) {
                 MovieDetailScreen(
                     movie = movie,
-                    onBackClick = { navController.popBackStack() }
-                    // inssert db here
+                    onBackClick = { navController.popBackStack() },
+                    db = db
                 )
             } else {
                 Text(
@@ -278,51 +339,57 @@ fun HomeActivity() {
         }
     }
 }
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MovieListScreen(
-    popularMovies: List<Movie>,
-    topRatedMovies: List<Movie>,
-    onMovieClick: (Movie) -> Unit
+    movies: List<Movie>,
+    selectedCategory: String,
+    onCategorySelected: (String) -> Unit,
+    onMovieClick: (Movie) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp)
     ) {
-        if (popularMovies.isEmpty() && topRatedMovies.isEmpty()) {
+        Spacer(modifier = Modifier.height(8.dp))
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(listOf("Popular Movies", "Top Rated Movies", "Favorite Movies")) { category ->
+                FilterChip(
+                    selected = selectedCategory == category,
+                    onClick = { onCategorySelected(category) },
+                    label = { Text(category) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    shape = RoundedCornerShape(50)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        if (movies.isEmpty()) {
             Text(
-                text = "Loading movies...",
+                text = "No movies available",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
             )
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
             ) {
-                item(span = { GridItemSpan(2) }) {
-                    Text(
-                        text = "Popular Movies",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-                items(popularMovies) { movie ->
-                    MovieCard(movie = movie, onClick = { onMovieClick(movie) })
-                }
-                item(span = { GridItemSpan(2) }) {
-                    Text(
-                        text = "Top Rated Movies",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-                items(topRatedMovies) { movie ->
+                items(movies) { movie ->
                     MovieCard(movie = movie, onClick = { onMovieClick(movie) })
                 }
             }
@@ -331,7 +398,7 @@ fun MovieListScreen(
 }
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
+fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var reviews by remember { mutableStateOf<List<Review>>(emptyList()) }
@@ -346,6 +413,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
         scope.launch(Dispatchers.IO) {
             reviews = fetchReviews(movie.id)
             videos = fetchMovieVideos(movie.id)
+            isFavorite = db.movieDao().isFavorite(movie.id)
         }
     }
 
@@ -365,6 +433,16 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                 actions = {
                     IconButton(onClick = {
                         Log.d("FAVOURITES", "clicked")
+                        scope.launch(Dispatchers.IO) {
+                            if (isFavorite) {
+                                db.movieDao().deleteMovie(movie.id)
+                                Log.i(TAG, "Removed ${movie.title} from favorites")
+                            } else {
+                                db.movieDao().insertMovie(movie.toEntity())
+                                Log.i(TAG, "Added ${movie.title} to favorites")
+                            }
+                            isFavorite = !isFavorite
+                        }
                     }) {
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -393,7 +471,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                     .fillMaxSize()
                     .verticalScroll(scrollState)
             ) {
-                // Cover Image
+                // cover
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -561,84 +639,6 @@ data class Video(
     val key: String,
     val url: String
 )
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
-    val context = LocalContext.current
-    var isFavorite by remember { mutableStateOf(false) }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = movie.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        Log.d("FAVOURITES", "clicked")
-                    }) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Favorite",
-                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
-            Text(
-                text = "Genres: ${movie.genres.joinToString { it.name }}",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Overview: ${movie.overview ?: "N/A"}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Release Date: ${movie.release_date}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Rating: ${movie.vote_average}/10",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-    }
-}
 
 val genreMap = mapOf(
     28 to "Action",
@@ -660,4 +660,38 @@ val genreMap = mapOf(
     53 to "Thriller",
     10752 to "War",
     37 to "Western"
+)
+
+fun Movie.toEntity() = MovieEntity(
+    id = id,
+    adult = adult,
+    backdrop_path = backdrop_path,
+    genres = genres,
+    original_language = original_language,
+    original_title = original_title,
+    overview = overview,
+    popularity = popularity,
+    poster_path = poster_path,
+    release_date = release_date,
+    title = title,
+    video = video,
+    vote_average = vote_average,
+    vote_count = vote_count
+)
+
+fun MovieEntity.toMovie() = Movie(
+    adult = adult,
+    backdrop_path = backdrop_path,
+    genres = genres,
+    id = id,
+    original_language = original_language,
+    original_title = original_title,
+    overview = overview,
+    popularity = popularity,
+    poster_path = poster_path,
+    release_date = release_date,
+    title = title,
+    video = video,
+    vote_average = vote_average,
+    vote_count = vote_count
 )
