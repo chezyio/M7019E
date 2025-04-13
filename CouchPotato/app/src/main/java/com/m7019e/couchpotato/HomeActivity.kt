@@ -377,7 +377,7 @@ fun HomeActivity() {
                     movie = movie,
                     onBackClick = { navController.popBackStack() },
                     db = db,
-//                    isConnected = isConnected
+                    isConnected = isConnected
                 )
             } else {
                 Text(
@@ -478,7 +478,7 @@ fun MovieListScreen(
 }
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase) {
+fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase, isConnected: Boolean) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var reviews by remember { mutableStateOf<List<Review>>(emptyList()) }
@@ -489,10 +489,12 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase) {
     val opacity = (scrollState.value / threshold).coerceIn(0f, 1f)
     var isFavorite by remember { mutableStateOf(false) }
 
-    LaunchedEffect(movie.id) {
+    LaunchedEffect(movie.id, isConnected) {
         scope.launch(Dispatchers.IO) {
-            reviews = fetchReviews(movie.id)
-            videos = fetchMovieVideos(movie.id)
+            if (isConnected) {
+                reviews = fetchReviews(movie.id)
+                videos = fetchMovieVideos(movie.id)
+            }
             isFavorite = db.movieDao().isFavorite(movie.id)
         }
     }
@@ -500,19 +502,26 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { /* null */ },
+                title = {
+                    Text(
+                        text = movie.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = opacity),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White // White for contrast
+                            tint = Color.White
                         )
                     }
                 },
                 actions = {
                     IconButton(onClick = {
-                        Log.d("FAVOURITES", "clicked")
                         scope.launch(Dispatchers.IO) {
                             if (isFavorite) {
                                 db.movieDao().deleteMovie(movie.id)
@@ -527,7 +536,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase) {
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "Favorite",
-                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else Color.White
                         )
                     }
                 },
@@ -535,8 +544,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase) {
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = opacity),
                     navigationIconContentColor = Color.White
                 ),
-                modifier = Modifier
-                    .zIndex(1f)
+                modifier = Modifier.zIndex(1f)
             )
         },
         containerColor = Color.Transparent,
@@ -565,7 +573,6 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase) {
                             .fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
-
                     // gradient overlay
                     Box(
                         modifier = Modifier
@@ -583,6 +590,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase) {
                     )
                 }
 
+                // Content
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
