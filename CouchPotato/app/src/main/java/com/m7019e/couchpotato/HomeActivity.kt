@@ -1,10 +1,14 @@
 package com.m7019e.couchpotato
 
+import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.Uri
 import android.util.Log
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,11 +19,16 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -27,25 +36,49 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat.getSystemService
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.room.Room
 import coil.compose.AsyncImage
+import com.m7019e.couchpotato.database.AppDatabase
+import com.m7019e.couchpotato.database.MovieEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import com.m7019e.couchpotato.BuildConfig
+import com.m7019e.couchpotato.database.MovieDAO
+import kotlinx.coroutines.flow.first
 
 private const val TAG = "CouchPotato"
 
+fun isNetworkConnected(context: Context): Boolean {
+    val connectivityManager = getSystemService(context, ConnectivityManager::class.java)
+    val network = connectivityManager?.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+}
+
+
+fun getDatabase(context: Context): AppDatabase {
+    return Room.databaseBuilder(
+        context.applicationContext,
+        AppDatabase::class.java,
+        "CouchPotatoDB"
+    ).build()
+}
+
+// GET 20 popular movies from tmdb
 suspend fun fetchPopularMovies(): List<Movie> {
     val apiKey = BuildConfig.TMDB_KEY
     val url = "https://api.themoviedb.org/3/movie/popular?api_key=$apiKey&language=en-US&page=1"
@@ -216,17 +249,86 @@ suspend fun fetchMovieVideos(movieId: Int): List<Video> {
     }
 }
 
+suspend fun fetchFavoriteMovies(dao: MovieDAO): List<Movie> {
+    return try {
+        dao.getAllFavoriteMovies().first().map { entity ->
+            entity.toMovie()
+        }.also {
+            Log.i(TAG, "Fetched ${it.size} favorite movies")
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Error fetching favorite movies: ${e.message}")
+        emptyList()
+    }
+}
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
+
 fun HomeActivity() {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val db = remember { getDatabase(context) }
     var popularMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var topRatedMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
+    var favoriteMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
+    var selectedCategory by remember { mutableStateOf("Popular Movies") }
+    var cachedMovies by remember { mutableStateOf<List<Movie>>(emptyList()) }
+    var viewType by remember { mutableStateOf("Popular Movies") }
+    var cachedViewType by remember { mutableStateOf("Popular Movies") }
+    var isConnected by remember { mutableStateOf(isNetworkConnected(context)) }
 
-    LaunchedEffect(Unit) {
+    // check for network connection
+    DisposableEffect(Unit) {
+        val connectivityManager = getSystemService(context, ConnectivityManager::class.java)
+        val networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                scope.launch(Dispatchers.Main) {
+                    isConnected = true
+                    Log.i(TAG, "Network connected")
+                }
+            }
+
+            override fun onLost(network: Network) {
+                scope.launch(Dispatchers.Main) {
+                    isConnected = false
+                    Log.i(TAG, "Network disconnected")
+                }
+            }
+        }
+        val networkRequest = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        connectivityManager?.registerNetworkCallback(networkRequest, networkCallback)
+        onDispose {
+            connectivityManager?.unregisterNetworkCallback(networkCallback)
+        }
+    }
+
+    // combine launch effect to fetch movies when viewType changes or internet reconnects
+    LaunchedEffect(viewType, isConnected) {
         scope.launch(Dispatchers.IO) {
-            popularMovies = fetchPopularMovies()
-            topRatedMovies = fetchTopRatedMovies()
+            // Clear cache when viewType changes
+            if (viewType != cachedViewType) {
+                cachedMovies = emptyList()
+                cachedViewType = viewType
+            }
+            // Fetch based on viewType
+            when (viewType) {
+                "Popular Movies" -> {
+                    if (isConnected && cachedMovies.isEmpty()) {
+                        cachedMovies = fetchPopularMovies()
+                    }
+                }
+                "Top Rated Movies" -> {
+                    if (isConnected && cachedMovies.isEmpty()) {
+                        cachedMovies = fetchTopRatedMovies()
+                    }
+                }
+                "Favorite Movies" -> {
+                    cachedMovies = fetchFavoriteMovies(db.movieDao())
+                }
+            }
         }
     }
 
@@ -236,22 +338,33 @@ fun HomeActivity() {
         modifier = Modifier.fillMaxSize()
     ) {
         composable("movie_list") {
-            MovieListScreen(
-                popularMovies = popularMovies,
-                topRatedMovies = topRatedMovies,
-                onMovieClick = { movie ->
-                    navController.navigate("movie_detail/${movie.id}")
-                }
-            )
+            Scaffold(
+                containerColor = MaterialTheme.colorScheme.background
+            ) { paddingValues ->
+                MovieListScreen(
+                    movies = cachedMovies,
+                    selectedCategory = viewType,
+                    cachedViewType = cachedViewType,
+                    isConnected = isConnected,
+                    onCategorySelected = { newCategory ->
+                        viewType = newCategory
+                    },
+                    onMovieClick = { movie ->
+                        navController.navigate("movie_detail/${movie.id}")
+                    },
+                    modifier = Modifier.padding(paddingValues)
+                )
+            }
         }
         composable("movie_detail/{movieId}") { backStackEntry ->
             val movieId = backStackEntry.arguments?.getString("movieId")?.toIntOrNull()
-            val allMovies = popularMovies + topRatedMovies
-            val movie = allMovies.find { it.id == movieId }
+            val movie = cachedMovies.find { it.id == movieId }
             if (movie != null) {
                 MovieDetailScreen(
                     movie = movie,
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    db = db,
+                    isConnected = isConnected
                 )
             } else {
                 Text(
@@ -264,60 +377,95 @@ fun HomeActivity() {
         }
     }
 }
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MovieListScreen(
-    popularMovies: List<Movie>,
-    topRatedMovies: List<Movie>,
-    onMovieClick: (Movie) -> Unit
+    movies: List<Movie>,
+    selectedCategory: String,
+    onCategorySelected: (String) -> Unit,
+    onMovieClick: (Movie) -> Unit,
+    modifier: Modifier = Modifier,
+    isConnected: Boolean,
+    cachedViewType: String,
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp)
     ) {
-        if (popularMovies.isEmpty() && topRatedMovies.isEmpty()) {
-            Text(
-                text = "Loading movies...",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        } else {
+        Spacer(modifier = Modifier.height(8.dp))
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(listOf("Popular Movies", "Top Rated Movies", "Favorite Movies")) { category ->
+                FilterChip(
+                    selected = selectedCategory == category,
+                    onClick = { onCategorySelected(category) },
+                    label = { Text(category) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    shape = RoundedCornerShape(50)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        if (movies.isNotEmpty() && selectedCategory == cachedViewType) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 8.dp)
             ) {
-                item(span = { GridItemSpan(2) }) {
-                    Text(
-                        text = "Popular Movies",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-                items(popularMovies) { movie ->
+                items(movies) { movie ->
                     MovieCard(movie = movie, onClick = { onMovieClick(movie) })
                 }
-                item(span = { GridItemSpan(2) }) {
-                    Text(
-                        text = "Top Rated Movies",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-                items(topRatedMovies) { movie ->
-                    MovieCard(movie = movie, onClick = { onMovieClick(movie) })
-                }
+            }
+        } else if (selectedCategory == "Favorite Movies" && movies.isEmpty()) {
+            Text(
+                text = "No favorite movies",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .padding(top = 16.dp)
+                    .align(Alignment.CenterHorizontally)
+            )
+        } else if (!isConnected && selectedCategory != "Favorite Movies") {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.baseline_signal_wifi_connected_no_internet_4_24),
+                    contentDescription = "No internet connection",
+                    modifier = Modifier
+                        .size(200.dp)
+                        .clip(MaterialTheme.shapes.medium),
+                    contentScale = ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "No Internet Connection",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
         }
     }
 }
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
+fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase, isConnected: Boolean) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var reviews by remember { mutableStateOf<List<Review>>(emptyList()) }
@@ -326,24 +474,56 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
     val density = LocalDensity.current
     val threshold = with(density) { 400.dp.toPx() }
     val opacity = (scrollState.value / threshold).coerceIn(0f, 1f)
+    var isFavorite by remember { mutableStateOf(false) }
 
-    LaunchedEffect(movie.id) {
+    LaunchedEffect(movie.id, isConnected) {
         scope.launch(Dispatchers.IO) {
-            reviews = fetchReviews(movie.id)
-            videos = fetchMovieVideos(movie.id)
+            if (isConnected) {
+                reviews = fetchReviews(movie.id)
+                videos = fetchMovieVideos(movie.id)
+            }
+            isFavorite = db.movieDao().isFavorite(movie.id)
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { /* null */ },
+                title = {
+                    Text(
+                        text = movie.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = opacity),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White // White for contrast
+                            tint = Color.White
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            if (isFavorite) {
+                                db.movieDao().deleteMovie(movie.id)
+                                Log.i(TAG, "Removed ${movie.title} from favorites")
+                            } else {
+                                db.movieDao().insertMovie(movie.toEntity())
+                                Log.i(TAG, "Added ${movie.title} to favorites")
+                            }
+                            isFavorite = !isFavorite
+                        }
+                    }) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else Color.White
                         )
                     }
                 },
@@ -351,8 +531,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = opacity),
                     navigationIconContentColor = Color.White
                 ),
-                modifier = Modifier
-                    .zIndex(1f)
+                modifier = Modifier.zIndex(1f)
             )
         },
         containerColor = Color.Transparent,
@@ -367,7 +546,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                     .fillMaxSize()
                     .verticalScroll(scrollState)
             ) {
-                // Cover Image
+                // cover
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -378,11 +557,9 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                             ?: "https://image.tmdb.org/t/p/w500${movie.poster_path}",
                         contentDescription = "${movie.title} cover",
                         modifier = Modifier
-                            .fillMaxSize()
-                            .clip(MaterialTheme.shapes.medium),
+                            .fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
-
                     // gradient overlay
                     Box(
                         modifier = Modifier
@@ -400,6 +577,7 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit) {
                     )
                 }
 
+                // Content
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -557,4 +735,38 @@ val genreMap = mapOf(
     53 to "Thriller",
     10752 to "War",
     37 to "Western"
+)
+
+fun Movie.toEntity() = MovieEntity(
+    id = id,
+    adult = adult,
+    backdrop_path = backdrop_path,
+    genres = genres,
+    original_language = original_language,
+    original_title = original_title,
+    overview = overview,
+    popularity = popularity,
+    poster_path = poster_path,
+    release_date = release_date,
+    title = title,
+    video = video,
+    vote_average = vote_average,
+    vote_count = vote_count
+)
+
+fun MovieEntity.toMovie() = Movie(
+    adult = adult,
+    backdrop_path = backdrop_path,
+    genres = genres,
+    id = id,
+    original_language = original_language,
+    original_title = original_title,
+    overview = overview,
+    popularity = popularity,
+    poster_path = poster_path,
+    release_date = release_date,
+    title = title,
+    video = video,
+    vote_average = vote_average,
+    vote_count = vote_count
 )
