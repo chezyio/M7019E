@@ -20,16 +20,26 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 
 
 @Composable
 fun VideoCard(video: Video) {
     val context = LocalContext.current
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"))
+            prepare()
+        }
+    }
 
     if (video.site != "YouTube") {
         Text(
@@ -64,27 +74,38 @@ fun VideoCard(video: Video) {
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(8.dp))
+//            AndroidView(
+//                factory = { ctx ->
+//                    WebView(ctx).apply {
+//                        settings.javaScriptEnabled = true
+//                        settings.domStorageEnabled = true
+//                        webViewClient = WebViewClient()
+//                        val html = """
+//                            <html>
+//                                <body>
+//                                    <iframe
+//                                        width="100%"
+//                                        height="180"
+//                                        src="https://www.youtube.com/embed/${video.key}?enablejsapi=1"
+//                                        frameborder="0"
+//                                        allowfullscreen>
+//                                    </iframe>
+//                                </body>
+//                            </html>
+//                        """.trimIndent()
+//                        Log.d(TAG, "Loading YouTube video: ${video.key}")
+//                        loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "UTF-8", null)
+//                    }
+//                },
+//                modifier = Modifier
+//                    .height(180.dp)
+//                    .fillMaxWidth()
+//            )
             AndroidView(
                 factory = { ctx ->
-                    WebView(ctx).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        webViewClient = WebViewClient()
-                        val html = """
-                            <html>
-                                <body>
-                                    <iframe 
-                                        width="100%" 
-                                        height="180" 
-                                        src="https://www.youtube.com/embed/${video.key}?enablejsapi=1" 
-                                        frameborder="0" 
-                                        allowfullscreen>
-                                    </iframe>
-                                </body>
-                            </html>
-                        """.trimIndent()
-                        Log.d(TAG, "Loading YouTube video: ${video.key}")
-                        loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "UTF-8", null)
+                    PlayerView(ctx).apply {
+                        player = exoPlayer
+                        useController = true
                     }
                 },
                 modifier = Modifier
