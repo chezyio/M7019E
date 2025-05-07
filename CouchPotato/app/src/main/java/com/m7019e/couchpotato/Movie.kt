@@ -27,3 +27,11 @@ data class Movie(
         return copy(genres = mappedGenres)
     }
 }
+
+@Serializable
+data class MovieResponse(
+    val results: List<Movie>,
+    val page: Int? = null,
+    val total_pages: Int? = null,
+    val total_results: Int? = null
+)

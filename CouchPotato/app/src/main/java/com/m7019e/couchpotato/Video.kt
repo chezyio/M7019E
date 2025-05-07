@@ -16,3 +16,9 @@ data class Video(
             else -> ""
         }
 }
+
+@Serializable
+data class VideoResponse(
+    val results: List<Video>,
+    val id: Int? = null
+)
