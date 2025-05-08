@@ -54,9 +54,12 @@ fun HomeActivity() {
     var isConnected by remember { mutableStateOf(isNetworkConnected(context)) }
 
     // check for network connection
+    // side effect that runs when the associated composable enters the composition
     DisposableEffect(Unit) {
         val connectivityManager = getSystemService(context, ConnectivityManager::class.java)
         val networkCallback = object : ConnectivityManager.NetworkCallback() {
+
+            // triggered when the device gains internet connectivity
             override fun onAvailable(network: Network) {
                 scope.launch(Dispatchers.Main) {
                     isConnected = true
@@ -64,6 +67,7 @@ fun HomeActivity() {
                 }
             }
 
+            // triggered when the device loses internet connectivit
             override fun onLost(network: Network) {
                 scope.launch(Dispatchers.Main) {
                     isConnected = false
@@ -71,9 +75,13 @@ fun HomeActivity() {
                 }
             }
         }
+
+        // ensures only networks with internet access are tracked
         val networkRequest = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
+
+        // callback is registered to the ConnectivityManager to start monitoring the network
         connectivityManager?.registerNetworkCallback(networkRequest, networkCallback)
         onDispose {
             connectivityManager?.unregisterNetworkCallback(networkCallback)
@@ -83,12 +91,12 @@ fun HomeActivity() {
     // combine launch effect to fetch movies when viewType changes or internet reconnects
     LaunchedEffect(viewType, isConnected) {
         scope.launch(Dispatchers.IO) {
-            // Clear cache when viewType changes
+            // clear cache when viewType changes
             if (viewType != cachedViewType) {
                 cachedMovies = emptyList()
                 cachedViewType = viewType
             }
-            // Fetch based on viewType
+            // fetch based on viewType
             when (viewType) {
                 "Popular Movies" -> {
                     if (isConnected && cachedMovies.isEmpty()) {

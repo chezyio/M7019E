@@ -63,7 +63,9 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase, is
     val opacity = (scrollState.value / threshold).coerceIn(0f, 1f)
     var isFavorite by remember { mutableStateOf(false) }
 
+    // side effect that launches a coroutine when any of the dependencies change
     LaunchedEffect(movie.id, isConnected) {
+        // non-blocking
         scope.launch(Dispatchers.IO) {
             if (isConnected) {
                 reviews = fetchReviews(movie.id)
@@ -97,10 +99,13 @@ fun MovieDetailScreen(movie: Movie, onBackClick: () -> Unit, db: AppDatabase, is
                 actions = {
                     IconButton(onClick = {
                         scope.launch(Dispatchers.IO) {
+                            // remove from db if fav = true
                             if (isFavorite) {
                                 db.movieDao().deleteMovie(movie.id)
                                 Log.i(TAG, "Removed ${movie.title} from favorites")
-                            } else {
+                            }
+                            // add db if fav = false
+                            else {
                                 db.movieDao().insertMovie(movie.toEntity())
                                 Log.i(TAG, "Added ${movie.title} to favorites")
                             }

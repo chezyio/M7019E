@@ -7,6 +7,8 @@ import org.json.JSONObject
 
 class Converters {
     @TypeConverter
+
+    // converts list into json array
     fun fromGenreList(genres: List<Genre>): String {
         val jsonArray = JSONArray()
         genres.forEach { genre ->
@@ -16,10 +18,13 @@ class Converters {
             }
             jsonArray.put(json)
         }
+        // '[{"id":1,"name":"Action"},{"id":2,"name":"Comedy"}]'
         return jsonArray.toString()
     }
 
     @TypeConverter
+
+    // convert JSON string back into a list of Genre objects
     fun toGenreList(genresString: String): List<Genre> {
         val jsonArray = JSONArray(genresString)
         val genres = mutableListOf<Genre>()
@@ -32,6 +37,7 @@ class Converters {
                 )
             )
         }
+        // List<Genre> = [Genre(id=1, name="Action"), Genre(id=2, name="Comedy")]
         return genres
     }
 }

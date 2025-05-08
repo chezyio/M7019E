@@ -8,5 +8,6 @@ import androidx.room.TypeConverters
 @Database(entities = [MovieEntity::class], version = 1)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
+    // interface containing methods for performing CRUD operations on the MovieEntity table
     abstract fun movieDao(): MovieDAO
 }
