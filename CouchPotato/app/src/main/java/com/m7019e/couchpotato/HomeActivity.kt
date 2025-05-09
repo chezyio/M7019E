@@ -18,9 +18,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.room.Room
+import androidx.work.*
 import com.m7019e.couchpotato.database.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
 const val TAG = "CouchPotato"
 
@@ -53,6 +55,19 @@ fun HomeActivity() {
     var cachedViewType by remember { mutableStateOf("Popular Movies") }
     var isConnected by remember { mutableStateOf(isNetworkConnected(context)) }
 
+    // scheduling worker to execute MovieFetchWorker periodically
+    LaunchedEffect(Unit) {
+        val workRequest = PeriodicWorkRequestBuilder<MovieFetchWorker>(
+            1, TimeUnit.HOURS
+        ).build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "movie_fetch_worker",
+            ExistingPeriodicWorkPolicy.KEEP,
+            workRequest
+        )
+    }
+
     // check for network connection
     // side effect that runs when the associated composable enters the composition
     DisposableEffect(Unit) {
@@ -67,7 +82,7 @@ fun HomeActivity() {
                 }
             }
 
-            // triggered when the device loses internet connectivit
+            // triggered when the device loses internet connectivity
             override fun onLost(network: Network) {
                 scope.launch(Dispatchers.Main) {
                     isConnected = false
@@ -99,15 +114,31 @@ fun HomeActivity() {
             // fetch based on viewType
             when (viewType) {
                 "Popular Movies" -> {
-                    if (isConnected && cachedMovies.isEmpty()) {
-                        cachedMovies = fetchPopularMovies()
-                    }
+                    //checking if database has list of movies and displaying it
+                    val cached = db.movieDao().getAllPopularMovies().map { it.toMovie() }
+                    cachedMovies = if (cached.isNotEmpty()) {
+                        cached
+                    } else if (isConnected) {
+                        //fetch from internet and updating database if database empty & internet available
+                        fetchPopularMovies().also {
+                            db.movieDao().insertPopularMovies(it.map { movie -> movie.toPopularEntity() })
+                            cachedMovies = it
+                        }
+                    } else emptyList()
                 }
+
                 "Top Rated Movies" -> {
-                    if (isConnected && cachedMovies.isEmpty()) {
-                        cachedMovies = fetchTopRatedMovies()
-                    }
+                    val cached = db.movieDao().getAllTopRatedMovies().map { it.toMovie() }
+                    cachedMovies = if (cached.isNotEmpty()) {
+                        cached
+                    } else if (isConnected) {
+                        fetchTopRatedMovies().also {
+                            db.movieDao().insertTopRatedMovies(it.map { movie -> movie.toTopRatedEntity() })
+                            cachedMovies = it
+                        }
+                    } else emptyList()
                 }
+
                 "Favorite Movies" -> {
                     cachedMovies = fetchFavoriteMovies(db.movieDao())
                 }
@@ -160,3 +191,36 @@ fun HomeActivity() {
         }
     }
 }
+
+//Worker to fetch popular & top rated movies and updating database
+class MovieFetchWorker(
+    context: Context,
+    workerParams: WorkerParameters
+) : CoroutineWorker(context, workerParams) {
+
+    override suspend fun doWork(): Result {
+        val db = getDatabase(applicationContext)
+        val dao = db.movieDao()
+
+        return try {
+            if (isNetworkConnected(applicationContext)) {
+                val popular = fetchPopularMovies()
+                val topRated = fetchTopRatedMovies()
+
+                dao.insertPopularMovies(popular.map { it.toPopularEntity() })
+                dao.insertTopRatedMovies(topRated.map { it.toTopRatedEntity() })
+
+                Log.i(TAG, "Background fetch successful")
+                Result.success()
+            } else {
+                Log.i(TAG, "No internet connection, skipping fetch")
+                Result.retry()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Fetch failed", e)
+            Result.retry()
+        }
+    }
+}
+
+

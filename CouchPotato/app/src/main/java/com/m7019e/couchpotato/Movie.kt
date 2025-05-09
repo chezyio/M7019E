@@ -1,6 +1,8 @@
 package com.m7019e.couchpotato
 
 import com.m7019e.couchpotato.database.MovieEntity
+import com.m7019e.couchpotato.database.PopularMovieEntity
+import com.m7019e.couchpotato.database.TopRatedMovieEntity
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -81,6 +83,51 @@ fun MovieEntity.toMovie() = Movie(
     backdrop_path = backdrop_path,
     genres = genres,
     id = id,
+    original_language = original_language,
+    original_title = original_title,
+    overview = overview,
+    popularity = popularity,
+    poster_path = poster_path,
+    release_date = release_date,
+    title = title,
+    video = video,
+    vote_average = vote_average,
+    vote_count = vote_count
+)
+
+//for popular & top rated movies
+fun Movie.toPopularEntity() = PopularMovieEntity(
+    id, adult, backdrop_path, genres, original_language, original_title,
+    overview, popularity, poster_path, release_date, title, video, vote_average, vote_count
+)
+
+fun Movie.toTopRatedEntity() = TopRatedMovieEntity(
+    id, adult, backdrop_path, genres, original_language, original_title,
+    overview, popularity, poster_path, release_date, title, video, vote_average, vote_count
+)
+
+fun PopularMovieEntity.toMovie() = Movie(
+    id = id,
+    adult = adult,
+    backdrop_path = backdrop_path,
+    genres = genres,
+    original_language = original_language,
+    original_title = original_title,
+    overview = overview,
+    popularity = popularity,
+    poster_path = poster_path,
+    release_date = release_date,
+    title = title,
+    video = video,
+    vote_average = vote_average,
+    vote_count = vote_count
+)
+
+fun TopRatedMovieEntity.toMovie() = Movie(
+    id = id,
+    adult = adult,
+    backdrop_path = backdrop_path,
+    genres = genres,
     original_language = original_language,
     original_title = original_title,
     overview = overview,

@@ -19,4 +19,17 @@ interface MovieDAO {
 
     @Query("SELECT EXISTS(SELECT 1 FROM Favourite WHERE id = :movieId)")
     suspend fun isFavorite(movieId: Int): Boolean
+
+    //for popular & top rated movies
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPopularMovies(movies: List<PopularMovieEntity>)
+
+    @Query("SELECT * FROM Popular")
+    suspend fun getAllPopularMovies(): List<PopularMovieEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTopRatedMovies(movies: List<TopRatedMovieEntity>)
+
+    @Query("SELECT * FROM TopRated")
+    suspend fun getAllTopRatedMovies(): List<TopRatedMovieEntity>
 }
